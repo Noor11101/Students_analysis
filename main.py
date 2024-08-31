@@ -1,53 +1,83 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+import sqlite3
 
 app = FastAPI()
-from fastapi.middleware.cors import CORSMiddleware
 
-# إضافة ميدلوير CORS إلى التطبيق
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # السماح لجميع النطاقات
-    allow_credentials=True,
-    allow_methods=["*"],  # السماح بجميع طرق HTTP (GET, POST, PUT, DELETE, إلخ)
-    allow_headers=["*"],  # السماح بجميع رؤوس الطلبات
-)
-# تعديل الاسم ليبدأ بحرف كبير وفقاً للعادات العامة لتسمية الأصناف في بايثون
-class Student(BaseModel):  
-    id: int
-    name: str
-    grade: int
+class Student(BaseModel):
+  id: int
+  name: str
+  grade: int
 
-# قائمة الطلاب تحتوي على كائنات من نوع Student
-students = [
-    Student(id=1, name="Noor", grade=8),
-    Student(id=2, name="Ali", grade=9),
-]
+def setup_database():
+  try:
+    conn = sqlite3.connect('students.db') # إنشاء اتصال بقاعدة البيانات
+    cursor = conn.cursor() # إنشاء مؤشر
+    cursor.execute(''' 
+        CREATE TABLE IF NOT EXISTS students (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            grade INTEGER
+        )
+    ''')
+    conn.commit() # حفظ التغييرات
+  except sqlite3.Error as e:  # التعامل مع الأخطاء المحتملة
+    print(e)  # طباعة الخطأ
+    return {"error": "Failed to fetch students"}  # إرجاع رسالة خطأ في حالة فشل جلب البيانات
 
-# تعريف دالة معالجة الطلب GET
-@app.get("/students")
-def read_students():
-    return students
+setup_database()
+
+@app.get("/students/")
+async def read_students():
+  try:
+    conn = sqlite3.connect('students.db')  # إنشاء اتصال بقاعدة البيانات
+    cursor = conn.cursor()  # إنشاء مؤشر (cursor) للتفاعل مع قاعدة البيانات
+    cursor.execute("SELECT * FROM students")  # تنفيذ استعلام SQL لجلب جميع الصفوف من جدول students
+    rows = cursor.fetchall()  # جلب جميع النتائج من قاعدة البيانات
+    conn.close()  # إغلاق الاتصال بقاعدة البيانات
+    return rows  # إرجاع البيانات التي تم جلبها من قاعدة البيانات
+  except sqlite3.Error as e:  # التعامل مع الأخطاء المحتملة
+    print(e)  # طباعة الخطأ
+    return {"error": "Failed to fetch students"}  # إرجاع رسالة خطأ في حالة فشل جلب البيانات
+ 
 
 @app.post("/students/")
-def create_student(new_student: Student):
-    students.append(new_student)
-    return new_student
+async def create_student(student: Student):
+  try:
+      conn = sqlite3.connect('students.db')
+      cursor = conn.cursor()
+      cursor.execute("INSERT INTO students (name, grade) VALUES (?, ?)", (student.name, student.grade))
+      conn.commit()
+      conn.close()
+      return {"message": "Student added successfully"}
+  except sqlite3.Error as e:
+      print(e)
+      return {"error": "Failed to create student"}
+
 
 @app.put("/students/{student_id}")
-def update_student(student_id: int, updated_student: Student):
-    for student in students:
-        if student.id == student_id:
-            student.name = updated_student.name
-            student.grade = updated_student.grade
-            return updated_student
-    return {"error": "Student not found"}
+async def update_student(student_id: int, student: Student):
+  try:
+    conn = sqlite3.connect('students.db')  # إنشاء اتصال بقاعدة البيانات
+    cursor = conn.cursor()  # إنشاء مؤشر
+    cursor.execute("UPDATE students SET name = ?, grade = ? WHERE id = ?",
+                  (student.name, student.grade, student_id))  #SQL لتحديث بيانات طالب
+    conn.commit()  # حفظ التغييرات في قاعدة البيانات
+    conn.close()  # إغلاق الاتصال
+    return {"id": student_id, **student.dict()}  # إرجاع بيانات الطالب المحدثة
+  except sqlite3.Error as e:  # في حالة حدوث خطأ
+    print(e)  # طباعة الخطأ
+    return {"error": "Failed to update student"}  # إرجاع رسالة خطأ
 
 @app.delete("/students/{student_id}")
-def delete_student(student_id: int):
-    for index, student in enumerate(students):
-        if student.id == student_id:
-            del students[index]
-            return {"message": "Student deleted"}
-    return {"error": "Student not found"}
-
+async def delete_student(student_id: int):
+  try:
+    conn = sqlite3.connect('students.db')  # إنشاء اتصال بقاعدة البيانات
+    cursor = conn.cursor()  # إنشاء مؤشر
+    cursor.execute("DELETE FROM students WHERE id = ?", (student_id,))  # تنفيذ استعلام SQL لحذف طالب
+    conn.commit()  # حفظ التغييرات في قاعدة البيانات
+    conn.close()  # إغلاق الاتصال
+    return {"message": "Student deleted"}  # إرجاع رسالة تأكيد الحذف
+  except sqlite3.Error as e:  # في حالة حدوث خطأ
+    print(e)  # طباعة الخطأ
+    return {"error": "Failed to delete student"}  # إرجاع رسالة خطأ

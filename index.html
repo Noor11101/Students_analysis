@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة المدرسة</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background-color: #f0f4f8;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        form {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        input[type="text"],
+        input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        button {
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        #studentList li {
+            background-color: #ffffff;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #studentList button {
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4">
+        <h1 class="text-3xl font-bold mb-6">نظام إدارة الطلاب</h1>
+        
+        <div class="mb-6">
+            <h2 class="text-xl font-semibold mb-4">إضافة طالب جديد</h2>
+            <form id="addStudentForm" class="space-y-3">
+                <input type="number" id="newId" placeholder="رقم الهوية" class="w-full p-2 border rounded" required>
+                <input type="text" id="newName" placeholder="اسم الطالب" class="w-full p-2 border rounded" required>
+                <input type="number" id="newGrade" placeholder="الصف" class="w-full p-2 border rounded" required>
+                <button type="submit" class="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 w-full">إضافة طالب</button>
+            </form>
+        </div>
+        
+        <div>
+            <h2 class="text-xl font-semibold mb-4">قائمة الطلاب</h2>
+            <ul id="studentList" class="space-y-3"></ul>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://students-analysis-chi.vercel.app';
+
+        // دالة لجلب قائمة الطلاب
+        async function fetchStudents() {
+            const response = await fetch(`${API_URL}/students`);
+            const students = await response.json();
+            const studentList = document.getElementById('studentList');
+            studentList.innerHTML = '';
+            students.forEach(student => {
+                const li = document.createElement('li');
+                li.className = 'bg-white p-3 rounded shadow flex justify-between items-center';
+                li.innerHTML = `
+                    <span class="text-lg">${student.name} - الصف: ${student.grade}</span>
+                    <div>
+                        <button onclick="deleteStudent(${student.id})" class="bg-red-500 text-white p-2 rounded mr-2 hover:bg-red-600">حذف</button>
+                        <button onclick="showUpdateForm(${student.id}, '${student.name}', ${student.grade})" class="bg-yellow-500 text-white p-2 rounded hover:bg-yellow-600">تعديل</button>
+                    </div>
+                `;
+                studentList.appendChild(li);
+            });
+        }
+
+        // دالة لإضافة طالب جديد
+        async function addStudent(event) {
+            event.preventDefault();
+            const id = document.getElementById('newId').value;
+            const name = document.getElementById('newName').value;
+            const grade = document.getElementById('newGrade').value;
+            
+            const response = await fetch(`${API_URL}/students/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: parseInt(id), name, grade: parseInt(grade) })
+            });
+            
+            if (response.ok) {
+                fetchStudents();
+                document.getElementById('addStudentForm').reset();
+            } else {
+                alert('حدث خطأ أثناء إضافة الطالب');
+            }
+        }
+
+        // دالة لحذف طالب
+        async function deleteStudent(id) {
+            const response = await fetch(`${API_URL}/students/${id}`, { method: 'DELETE' });
+            if (response.ok) {
+                fetchStudents();
+            } else {
+                alert('حدث خطأ أثناء حذف الطالب');
+            }
+        }
+
+        // دالة لعرض نموذج تحديث بيانات الطالب
+        function showUpdateForm(id, name, grade) {
+            const li = event.target.closest('li');
+            li.innerHTML = `
+                <form onsubmit="updateStudent(event, ${id})" class="w-full flex items-center">
+                    <input type="text" value="${name}" id="updateName${id}" class="flex-grow p-2 border rounded mr-2" required>
+                    <input type="number" value="${grade}" id="updateGrade${id}" class="w-20 p-2 border rounded mr-2" required>
+                    <button type="submit" class="bg-green-500 text-white p-2 rounded hover:bg-green-600">حفظ</button>
+                </form>
+            `;
+        }
+
+        // دالة لتحديث بيانات الطالب
+        async function updateStudent(event, id) {
+            event.preventDefault();
+            const name = document.getElementById(`updateName${id}`).value;
+            const grade = document.getElementById(`updateGrade${id}`).value;
+            
+            const response = await fetch(`${API_URL}/students/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, name, grade: parseInt(grade) })
+            });
+            
+            if (response.ok) {
+                fetchStudents();
+            } else {
+                alert('حدث خطأ أثناء تحديث بيانات الطالب');
+            }
+        }
+
+        // إضافة مستمع الحدث لنموذج إضافة الطالب
+        document.getElementById('addStudentForm').addEventListener('submit', addStudent);
+
+        // جلب قائمة الطلاب عند تحميل الصفحة
+        fetchStudents();
+    </script>
+</body>
+</html>
